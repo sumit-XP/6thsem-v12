@@ -3,7 +3,7 @@
 
 # Dataset root path (Kaggle environment)
 path: /kaggle/input/5th-sem-mini-dataset9/dataset-9
-
+# path: /dataset-9
 # Train/Val/Test splits (COCO format)
 # Train/Val/Test splits (YOLO format)
 train: train/images

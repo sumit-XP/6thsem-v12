@@ -14,7 +14,7 @@ class Config:
     labels_subdir: str = ""  # Empty for COCO format
     train_split: str = "train"
     test_split: str = "test"
-    img_size: int = 640
+    img_size: int = 416
 
 
 
@@ -25,15 +25,16 @@ class Config:
 
     # Training - Optimized for Kaggle
     batch_size: int = 16
-    epochs: int = 120
+    epochs: int = 200  # Increased for better convergence with augmentations
     gradient_accumulation_steps: int = 2
-    learning_rate: float = 0.005
+    learning_rate: float = 0.002  # Lower LR for AdamW
     momentum: float = 0.937
     weight_decay: float = 5e-4
     iou_threshold: float = 0.5
     conf_threshold: float = 0.25
     warmup_epochs: int = 5
     scheduler: str = "cosine"
+    optimizer: str = "AdamW"  # Better for attention-based models
 
 
     # Performance
@@ -46,6 +47,7 @@ class Config:
     # Checkpoints/Logging
     save_dir: str = "runs/train"
     save_every: int = 10
+    close_mosaic: int = 30  # Disable mosaic for last 20 epochs
 
 
 
@@ -56,6 +58,16 @@ class Config:
     model_variant: str = "yolov12m"  # Options: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
     pretrained: bool = True  # Use pretrained weights
     patience: int = 50  # Early stopping patience
+
+    # Level 2 Augmentations (Geometric & Color)
+    degrees: float = 10.0      # Rotation +/- 10 degrees
+    translate: float = 0.1     # Translate +/- 0.1
+    scale: float = 0.5         # Scale gain +/- 0.5
+    hsv_h: float = 0.015       # Hue fraction
+    hsv_s: float = 0.7         # Saturation fraction
+    hsv_v: float = 0.4         # Value fraction
+    
+
 
 
 

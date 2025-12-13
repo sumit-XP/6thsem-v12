@@ -1,6 +1,19 @@
-__pycache__/
+# Datasets
+dataset-9/
+datasets/
+
+# Runs and Models
 runs/
-*.zip
+*.pt
+*.onnx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv
+env/
+venv/
+
+# IDE
 .vscode/
 .idea/
-*.pyc

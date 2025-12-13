@@ -78,7 +78,16 @@ def main():
             name="train_yolov12",
             exist_ok=True,
             pretrained=True,
-            verbose=True
+            verbose=True,
+            # Level 2 Augmentations & Hyperparameters
+            optimizer=C.optimizer,
+            degrees=C.degrees,
+            translate=C.translate,
+            scale=C.scale,
+            hsv_h=C.hsv_h,
+            hsv_s=C.hsv_s,
+            hsv_v=C.hsv_v,
+            close_mosaic=C.close_mosaic
         )
         print("Training completed.")
     except Exception as e:

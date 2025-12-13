@@ -38,9 +38,10 @@ def main():
 
     # Load model
     model_path = f"{C.model_variant}.pt"
-    if not os.path.exists(model_path):
-        print(f"Error: Model file {model_path} not found.")
-        return
+    # Automatic download if not found
+    # if not os.path.exists(model_path):
+    #    print(f"Error: Model file {model_path} not found.")
+    #    return
 
     print(f"Loading model from {model_path}...")
     try:

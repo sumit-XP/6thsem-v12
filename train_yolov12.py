@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import argparse
 from pathlib import Path
+import torch
 
 from ultralytics import YOLO
 from config import TRAINING_CONFIG as C

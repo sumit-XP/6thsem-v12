@@ -38,10 +38,17 @@ def main():
 
     # Load model
     model_path = f"{C.model_variant}.pt"
-    # Automatic download if not found
-    # if not os.path.exists(model_path):
-    #    print(f"Error: Model file {model_path} not found.")
-    #    return
+    # Automatic download if not found - YOLOv12 (sunsmarterjie)
+    if not os.path.exists(model_path):
+        print(f"Downloading {model_path} from GitHub releases...")
+        try:
+            # Using the likely release URL for YOLOv12
+            url = f"https://github.com/sunsmarterjie/yolov12/releases/download/v1.0/{model_path}"
+            torch.hub.download_url_to_file(url, model_path)
+        except Exception as e:
+            print(f"Failed to auto-download: {e}")
+            print("Please upload 'yolov12m.pt' to Kaggle manually if download fails.")
+            return
 
     print(f"Loading model from {model_path}...")
     try:

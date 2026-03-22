@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐄 Cow Behavior Detection Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🐄 Dairy Cow Behavior Detection</h1>
+                <p class="subtitle">Powered by YOLOv12 • AI-Driven Livestock Monitoring</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="card upload-card">
+                    <h2>📸 Upload Image</h2>
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="fileInput" accept="image/*" hidden>
+                        <div class="upload-placeholder">
+                            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            <p class="upload-text">Drag & drop or click to upload</p>
+                            <p class="upload-subtext">Supports: JPG, PNG, WEBP, BMP</p>
+                        </div>
+                        <img id="previewImage" class="preview-image" style="display: none;">
+                    </div>
+                    <button id="detectBtn" class="btn-primary" disabled>
+                        <span class="btn-text">Detect Behavior</span>
+                        <div class="spinner" style="display: none;"></div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="card results-card">
+                    <h2>📊 Detection Results</h2>
+                    
+                    <!-- Statistics -->
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalDetections">0</div>
+                            <div class="stat-label">Total Detections</div>
+                        </div>
+                    </div>
+
+                    <!-- Annotated Image -->
+                    <div class="result-image-container">
+                        <h3>Annotated Image</h3>
+                        <img id="resultImage" class="result-image" alt="Detection Results">
+                    </div>
+
+                    <!-- Detections List -->
+                    <div class="detections-list">
+                        <h3>Detected Behaviors</h3>
+                        <div id="detectionsList" class="detections-container">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>YOLOv12 Cow Behavior Detection System | 4 Classes: Drinking, Eating, Sitting, Standing</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

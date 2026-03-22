@@ -1,8 +1,5 @@
-numpy<2.0
-opencv-python>=4.7
-matplotlib>=3.7
-torch>=2.0
-torchvision>=0.15
-pytest>=7.0
-ultralytics>=8.0.0
-pyyaml>=6.0
+Flask==3.0.0
+ultralytics
+Pillow>=10.1.0
+numpy>=1.24.0
+opencv-python>=4.8.0

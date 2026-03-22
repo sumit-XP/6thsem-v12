@@ -1,0 +1,11 @@
+path: C:/Users/sumit/Sumit-Personal/college-projects/mini/fifth/archive/v12 - Copy/dataset-9
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 4
+names:
+  0: Drinking
+  1: Eating
+  2: Sitting
+  3: Standing

@@ -47,7 +47,7 @@ class Config:
     # Checkpoints/Logging
     save_dir: str = "runs/train"
     save_every: int = 10
-    close_mosaic: int = 30  # Disable mosaic for last 20 epochs
+    # close_mosaic: int = 30  # Disable mosaic for last 20 epochs
 
 
 
@@ -55,7 +55,7 @@ class Config:
     device: str = "cuda"
 
     # YOLOv8 specific
-    model_variant: str = "yolov12m"  # Options: yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+    model_variant: str = "rtdetr-l"  # Options: rtdetr-l, etc.
     pretrained: bool = True  # Use pretrained weights
     patience: int = 50  # Early stopping patience
 

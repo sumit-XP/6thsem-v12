@@ -1,5 +1,5 @@
 """
-YOLOv12 Resume Training Script for Kaggle
+RT-DETR Resume Training Script for Kaggle
 
 This script resumes training from epoch 162 to reach 200 epochs.
 Use this when you have a checkpoint from a previous training session.
@@ -10,15 +10,15 @@ import argparse
 from pathlib import Path
 import torch
 
-from ultralytics import YOLO
+from ultralytics import RTDETR
 from config import TRAINING_CONFIG as C
 import yaml
 
 def main():
-    """Resume YOLOv12 training from checkpoint."""
-    parser = argparse.ArgumentParser(description="Resume YOLOv12 Training")
+    """Resume RT-DETR training from checkpoint."""
+    parser = argparse.ArgumentParser(description="Resume RT-DETR Training")
     parser.add_argument("--checkpoint", type=str, 
-                       default="/kaggle/working/runs/train_yolov12/weights/last.pt",
+                       default="/kaggle/working/runs/train_rtdetr/weights/last.pt",
                        help="Path to checkpoint file")
     parser.add_argument("--epochs", type=int, default=200, 
                        help="Total epochs to train to (not additional epochs)")
@@ -30,7 +30,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 70)
-    print("YOLOv12 RESUME Training Configuration")
+    print("RT-DETR RESUME Training Configuration")
     print("=" * 70)
     print(f"Checkpoint: {args.checkpoint}")
     print(f"Target Epochs: {args.epochs}")
@@ -43,15 +43,15 @@ def main():
     if not os.path.exists(args.checkpoint):
         print(f"❌ ERROR: Checkpoint not found at {args.checkpoint}")
         print("\nPossible locations to check:")
-        print("  - /kaggle/working/runs/train_yolov12/weights/last.pt")
-        print("  - /kaggle/input/your-checkpoint-dataset/runs/train_yolov12/weights/last.pt")
+        print("  - /kaggle/working/runs/train_rtdetr/weights/last.pt")
+        print("  - /kaggle/input/your-checkpoint-dataset/runs/train_rtdetr/weights/last.pt")
         print("\nIf checkpoint is in a dataset, update --checkpoint argument")
         return
 
     # Load checkpoint
     print(f"\n✅ Loading checkpoint from {args.checkpoint}...")
     try:
-        model = YOLO(args.checkpoint)
+        model = RTDETR(args.checkpoint)
         print("✅ Checkpoint loaded successfully!")
     except Exception as e:
         print(f"❌ Failed to load checkpoint: {e}")
@@ -64,7 +64,7 @@ def main():
         with open(args.data, 'r') as f:
             yaml_data = yaml.safe_load(f)
         yaml_data['path'] = C.dataset_root
-        data_config = "yolov12_temp.yaml"
+        data_config = "rtdetr_temp.yaml"
         with open(data_config, 'w') as f:
             yaml.dump(yaml_data, f)
 
@@ -87,7 +87,7 @@ def main():
             patience=C.patience,
             save=True,
             project="runs",
-            name="train_yolov12",
+            name="train_rtdetr",
             exist_ok=True,
             pretrained=True,
             verbose=True,
@@ -98,15 +98,14 @@ def main():
             scale=C.scale,
             hsv_h=C.hsv_h,
             hsv_s=C.hsv_s,
-            hsv_v=C.hsv_v,
-            close_mosaic=C.close_mosaic
+            hsv_v=C.hsv_v
         )
         print("\n" + "=" * 70)
         print("✅ Training completed successfully!")
         print("=" * 70)
-        print(f"Results saved to: runs/train_yolov12")
-        print(f"Best weights: runs/train_yolov12/weights/best.pt")
-        print(f"Last weights: runs/train_yolov12/weights/last.pt")
+        print(f"Results saved to: runs/train_rtdetr")
+        print(f"Best weights: runs/train_rtdetr/weights/best.pt")
+        print(f"Last weights: runs/train_rtdetr/weights/last.pt")
         
     except Exception as e:
         print(f"\n❌ Training failed: {e}")

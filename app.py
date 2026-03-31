@@ -1,5 +1,5 @@
 """
-YOLOv12 Dairy Cow Behavior Detection Dashboard
+RT-DETR Dairy Cow Behavior Detection Dashboard
 Flask web application for real-time inference
 """
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 import os
 import uuid
 from pathlib import Path
-from ultralytics import YOLO
+from ultralytics import RTDETR
 from PIL import Image
 import numpy as np
 
@@ -31,15 +31,15 @@ CLASS_NAMES = {
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['RESULTS_FOLDER'], exist_ok=True)
 
-# Load the YOLOv12 model
-MODEL_PATH = 'yolo-augmented/runs/train_yolov12/weights/best.pt'
+# Load the RT-DETR model
+MODEL_PATH = 'runs/train_rtdetr/weights/best.pt'
 if not os.path.exists(MODEL_PATH):
     # Try alternative path
-    MODEL_PATH = 'runs/train_yolov12/weights/best.pt'
+    MODEL_PATH = 'rtdetr-l.pt'
 
 try:
     print(f"Loading model from: {MODEL_PATH}")
-    model = YOLO(MODEL_PATH)
+    model = RTDETR(MODEL_PATH)
     print("✅ Model loaded successfully!")
 except Exception as e:
     print(f"⚠️ Warning: Could not load model - {e}")
@@ -145,7 +145,7 @@ def health():
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🐄 YOLOv12 Dairy Cow Behavior Detection Dashboard")
+    print("🐄 RT-DETR Dairy Cow Behavior Detection Dashboard")
     print("=" * 70)
     print(f"Model: {MODEL_PATH}")
     print(f"Model Loaded: {'✅ Yes' if model else '❌ No'}")

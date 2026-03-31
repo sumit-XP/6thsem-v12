@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import cv2
-from ultralytics import YOLO
+from ultralytics import RTDETR
 
 from tracker import CowTracker
 from behavior_engine import BehaviourEngine
@@ -43,9 +43,8 @@ from visualization import draw_frame
 # ---------------------------------------------------------------------------
 
 _DEFAULT_WEIGHTS_CANDIDATES = [
-    "yolo-augmented/runs/train_yolov12/weights/best.pt",
-    "runs/train_yolov12/weights/best.pt",
-    "runs/train_yolov8/weights/best.pt",
+    "runs/train_rtdetr/weights/best.pt",
+    "rtdetr-l.pt",
 ]
 
 
@@ -112,11 +111,11 @@ def run_pipeline(
 
     Args:
         source:       Path to input video file (or '0' for webcam).
-        weights:      Path to YOLO .pt weights file.
+        weights:      Path to RT-DETR .pt weights file.
         conf:         Detection confidence threshold.
         iou:          NMS IoU threshold.
         device:       Torch device string.
-        imgsz:        YOLO inference resolution.
+        imgsz:        RT-DETR inference resolution.
         output:       Output annotated video path. Auto-generated if empty.
         show_hud:     Whether to overlay behaviour stats HUD on output.
         window_size:  Smoothing window size (frames).
@@ -131,8 +130,8 @@ def run_pipeline(
     source_path = source if source != "0" else 0  # webcam support
 
     # --- Load model ---
-    print(f"\n[1/5] Loading YOLO model: {weights}")
-    model = YOLO(weights)
+    print(f"\n[1/5] Loading RT-DETR model: {weights}")
+    model = RTDETR(weights)
     print("  ✅ Model loaded successfully")
 
     # --- Open video ---
@@ -246,7 +245,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source",  type=str, required=True,
                         help="Path to input video file, or '0' for webcam")
     parser.add_argument("--weights", type=str, default="",
-                        help="Path to YOLO .pt weights. Auto-detected if empty.")
+                        help="Path to RT-DETR .pt weights. Auto-detected if empty.")
     parser.add_argument("--conf",    type=float, default=0.35,
                         help="Detection confidence threshold")
     parser.add_argument("--iou",     type=float, default=0.5,
@@ -254,7 +253,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device",  type=str, default="cpu",
                         help="Device: cpu | cuda | 0")
     parser.add_argument("--imgsz",   type=int, default=640,
-                        help="YOLO inference image size")
+                        help="RT-DETR inference image size")
     parser.add_argument("--output",  type=str, default="",
                         help="Output annotated video path (auto-generated if empty)")
     parser.add_argument("--no-hud",  action="store_true",

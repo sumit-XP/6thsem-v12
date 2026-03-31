@@ -1,15 +1,15 @@
-from ultralytics import YOLO
+from ultralytics import RTDETR
 import os
 
 def main():
     # Load the best model
-    model_path = os.path.join("runs", "train_yolov12", "weights", "best.pt")
+    model_path = os.path.join("runs", "train_rtdetr", "weights", "best.pt")
     if not os.path.exists(model_path):
         print(f"Error: Model not found at {model_path}")
         return
 
     print(f"Loading model from {model_path}...")
-    model = YOLO(model_path)
+    model = RTDETR(model_path)
 
     # Validate on the test set
     print("Running validation on test set...")
@@ -23,7 +23,7 @@ def main():
     print(f"Precision: {metrics.box.mp:.4f}")
     print(f"Recall:    {metrics.box.mr:.4f}")
     
-    # Fitness (weighted combination of metrics used by YOLO to select best model)
+    # Fitness (weighted combination of metrics used by RT-DETR to select best model)
     print(f"Fitness:   {metrics.fitness:.4f}")
     
     # Class-wise metrics

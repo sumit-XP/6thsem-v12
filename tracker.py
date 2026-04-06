@@ -61,6 +61,7 @@ class CowTracker:
         self.imgsz = imgsz
         self.tracker = tracker
         self.device = device
+        self.half = device != "cpu"
 
     def update(self, frame: np.ndarray) -> List[TrackedObject]:
         """
@@ -80,6 +81,7 @@ class CowTracker:
             imgsz=self.imgsz,
             tracker=self.tracker,
             device=self.device,
+            half=self.half,
             persist=True,    # Persist track state between frames (critical!)
             verbose=False,
         )

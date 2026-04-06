@@ -24,9 +24,9 @@ class Config:
     anchors: Optional[List[Tuple[int, int]]] = None
 
     # Training - Optimized for Kaggle
-    batch_size: int = 16
+    batch_size: int = 32
     epochs: int = 200  # Increased for better convergence with augmentations
-    gradient_accumulation_steps: int = 2
+    gradient_accumulation_steps: int = 1
     learning_rate: float = 0.002  # Lower LR for AdamW
     momentum: float = 0.937
     weight_decay: float = 5e-4
@@ -38,7 +38,7 @@ class Config:
 
 
     # Performance
-    num_workers: int = 1
+    num_workers: int = 4
     pin_memory: bool = True
     mixed_precision: bool = True
     use_compile: bool = False

@@ -17,3 +17,9 @@ venv/
 # IDE
 .vscode/
 .idea/
+
+# Media and Outputs
+video/
+videos/
+clips/
+dataset_clips/

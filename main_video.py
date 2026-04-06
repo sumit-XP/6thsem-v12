@@ -31,19 +31,25 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import cv2
-from ultralytics import RTDETR
+from ultralytics import YOLO
 
 from tracker import CowTracker
 from behavior_engine import BehaviourEngine
 from visualization import draw_frame
+from roi_extractor import ROIExtractor
+from clip_buffer import ClipBuffer
+from models.temporal_vit import TemporalViT
+import torch
 
 
 # ---------------------------------------------------------------------------
-# Helper: resolve model weights
+# Helper: resolve model weights & video source
 # ---------------------------------------------------------------------------
 
 _DEFAULT_WEIGHTS_CANDIDATES = [
+    "yolo-augmented/runs/train_yolov12/weights/best.pt",
     "runs/train_rtdetr/weights/best.pt",
+    "yolov12m.pt",
     "rtdetr-l.pt",
 ]
 
@@ -59,6 +65,22 @@ def _resolve_weights(weights: str) -> str:
     raise FileNotFoundError(
         "No trained model weights found. Please train the model first or pass --weights."
     )
+
+
+def _resolve_source(source: str) -> str:
+    """Return the source if provided, otherwise pick the first mp4 in videos/."""
+    if source:
+        return source
+
+    videos_dir = Path("videos")
+    if videos_dir.exists() and videos_dir.is_dir():
+        video_files = list(videos_dir.glob("*.mp4"))
+        if video_files:
+            chosen = str(video_files[0])
+            print(f"  [source] No source provided, defaulting to: {chosen}")
+            return chosen
+
+    return "0"  # Fallback to webcam if nothing else found
 
 
 # ---------------------------------------------------------------------------
@@ -98,13 +120,15 @@ def export_csv(stats: Dict[int, Dict[str, float]], output_path: str):
 def run_pipeline(
     source: str,
     weights: str = "",
+    vit_weights: str = "",
     conf: float = 0.35,
     iou: float = 0.5,
     device: str = "cpu",
     imgsz: int = 640,
     output: str = "",
     show_hud: bool = True,
-    window_size: int = 15,
+    window_size: int = 8,
+    frame_skip: int = 1,
 ):
     """
     Run the full detection + tracking + analytics pipeline on a video.
@@ -119,6 +143,7 @@ def run_pipeline(
         output:       Output annotated video path. Auto-generated if empty.
         show_hud:     Whether to overlay behaviour stats HUD on output.
         window_size:  Smoothing window size (frames).
+        frame_skip:   Process every Nth frame (speeds up inference by reusing last frame).
     """
 
     print("=" * 65)
@@ -127,11 +152,12 @@ def run_pipeline(
 
     # --- Resolve paths ---
     weights = _resolve_weights(weights)
+    source  = _resolve_source(source)
     source_path = source if source != "0" else 0  # webcam support
 
     # --- Load model ---
-    print(f"\n[1/5] Loading RT-DETR model: {weights}")
-    model = RTDETR(weights)
+    print(f"\n[1/5] Loading YOLO model: {weights}")
+    model = YOLO(weights)
     print("  ✅ Model loaded successfully")
 
     # --- Open video ---
@@ -162,7 +188,25 @@ def run_pipeline(
     # --- Initialise modules ---
     print(f"\n[3/5] Initialising tracker and behaviour engine  (window={window_size} frames)")
     tracker = CowTracker(model=model, conf=conf, iou=iou, imgsz=imgsz, device=device)
-    engine  = BehaviourEngine(window_size=window_size, fps=video_fps)
+    engine  = BehaviourEngine(fps=video_fps)
+    roi_extractor = ROIExtractor(target_size=None)  # Start with raw crops
+    clip_buffer   = ClipBuffer(window_size=window_size)
+
+    # --- Phase 2: Inject ViT if provided ---
+    if vit_weights:
+        if os.path.exists(vit_weights):
+            print(f"\n[3.5/5] Loading Phase 2 Temporal ViT model: {vit_weights}")
+            vit_model = TemporalViT(num_classes=4, num_frames=window_size)
+            vit_model.load_state_dict(torch.load(vit_weights, map_location=device))
+            vit_model.to(torch.device(device))
+            
+            engine.set_vit_classifier(vit_model)
+            # ViT requires 224x224
+            roi_extractor.target_size = (224, 224) 
+            print("  ✅ ViT loaded and injected into BehaviourEngine")
+            print("  ✅ ROI Extractor locked to 224x224 crops")
+        else:
+            print(f"\n[!] Warning: ViT weights '{vit_weights}' not found. Falling back to Phase 1 setup.")
 
     # --- Frame loop ---
     print("\n[4/5] Processing frames...")
@@ -170,6 +214,7 @@ def run_pipeline(
 
     frame_idx  = 0
     t_start    = time.time()
+    last_annotated = None
 
     try:
         while True:
@@ -179,14 +224,39 @@ def run_pipeline(
 
             frame_idx += 1
 
+            if frame_skip > 1 and frame_idx % frame_skip != 0 and last_annotated is not None:
+                writer.write(last_annotated)
+                continue
+
             # ── Tracking ──────────────────────────────────────────
             tracked_objects = tracker.update(frame)
 
-            # ── Behaviour engine ────────────────────────────────── 
+            # ── Crop extraction ───────────────────────────────────
+            rois = roi_extractor.process(frame, tracked_objects)
+
+            # ── Behaviour engine & Clip Formation ─────────────────
             smoothed_labels: Dict[int, str] = {}
+            current_ids = []
+
             for obj in tracked_objects:
-                smoothed = engine.update(obj.track_id, obj.class_name)
-                smoothed_labels[obj.track_id] = smoothed
+                current_ids.append(obj.track_id)
+                
+                # Push frame to rolling buffer if valid crop exists
+                if obj.track_id in rois:
+                    clip_buffer.push(obj.track_id, rois[obj.track_id], obj.class_name)
+
+                # Check if buffer has enough frames (T frames)
+                clip = clip_buffer.get_clip(obj.track_id)
+                if clip is not None:
+                    smoothed = engine.update_from_clip(clip)
+                    smoothed_labels[obj.track_id] = smoothed
+                else:
+                    # Fallback to last known smoothed label while buffering
+                    last_known = engine.get_smoothed(obj.track_id)
+                    smoothed_labels[obj.track_id] = last_known or "Buffering..."
+
+            # Cleanup stale tracks from buffer
+            clip_buffer.cleanup(current_ids)
 
             # ── Visualisation ────────────────────────────────────
             stats = engine.get_stats() if show_hud else None
@@ -198,6 +268,7 @@ def run_pipeline(
                 fps=video_fps,
                 frame_number=frame_idx,
             )
+            last_annotated = annotated
 
             writer.write(annotated)
 
@@ -242,10 +313,12 @@ def parse_args() -> argparse.Namespace:
         description="Cow Behaviour Detection — Video Pipeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--source",  type=str, required=True,
-                        help="Path to input video file, or '0' for webcam")
+    parser.add_argument("--source",  type=str, default="",
+                        help="Path to input video file (e.g. 'videos/test.mp4'), or '0' for webcam. Defaults to first video in 'videos/' if empty.")
     parser.add_argument("--weights", type=str, default="",
-                        help="Path to RT-DETR .pt weights. Auto-detected if empty.")
+                        help="Path to YOLO .pt weights. Auto-detected if empty.")
+    parser.add_argument("--vit-weights", type=str, default="",
+                        help="Path to Temporal ViT weights for Phase 2 inference.")
     parser.add_argument("--conf",    type=float, default=0.35,
                         help="Detection confidence threshold")
     parser.add_argument("--iou",     type=float, default=0.5,
@@ -258,8 +331,10 @@ def parse_args() -> argparse.Namespace:
                         help="Output annotated video path (auto-generated if empty)")
     parser.add_argument("--no-hud",  action="store_true",
                         help="Disable the on-screen HUD overlay (faster)")
-    parser.add_argument("--window",  type=int, default=15,
-                        help="Behaviour smoothing window size (frames)")
+    parser.add_argument("--window",  type=int, default=8,
+                        help="Behaviour smoothing window size (frames) / Clip length for ViT")
+    parser.add_argument("--frame-skip", type=int, default=1,
+                        help="Process only every N-th frame to speed up video processing (skips tracking and writes last annotated frame).")
     return parser.parse_args()
 
 
@@ -268,6 +343,7 @@ if __name__ == "__main__":
     run_pipeline(
         source      = args.source,
         weights     = args.weights,
+        vit_weights = args.vit_weights,
         conf        = args.conf,
         iou         = args.iou,
         device      = args.device,
@@ -275,4 +351,5 @@ if __name__ == "__main__":
         output      = args.output,
         show_hud    = not args.no_hud,
         window_size = args.window,
+        frame_skip  = args.frame_skip,
     )

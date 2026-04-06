@@ -2,22 +2,23 @@
 behavior_engine.py — Temporal Behaviour Smoothing & Duration Analytics
 
 Responsibilities:
-  1. Maintain a rolling window of recent behaviour labels per cow ID.
-  2. Determine the "smoothed" behaviour via majority vote to eliminate flicker.
-  3. Track cumulative duration (in seconds) of each behaviour per cow.
+  1. Determine the "smoothed" behaviour via majority vote over a T-frame clip.
+  2. Track cumulative duration (in seconds) of each behaviour per cow.
 
 Design:
   - Per-cow state is stored in a dict keyed by track_id.
-  - Call `update(track_id, class_name, fps)` every frame.
+  - Call `update_from_clip(clip)` when a full T-frame clip is ready.
   - Call `get_smoothed(track_id)` to get the stable label for that frame.
   - Call `get_stats()` to get the full behaviour duration summary.
 """
 
 from __future__ import annotations
 
-from collections import deque, Counter
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+from clip_buffer import Clip
 
 
 # ---------------------------------------------------------------------------
@@ -28,9 +29,6 @@ from typing import Dict, List, Optional, Tuple
 class CowState:
     """Tracks state for a single cow across video frames."""
     track_id: int
-
-    # Rolling window of recent raw behaviour labels
-    history: deque = field(default_factory=lambda: deque(maxlen=15))
 
     # Cumulative duration per behaviour (seconds)
     durations: Dict[str, float] = field(default_factory=lambda: {
@@ -50,47 +48,81 @@ class CowState:
 
 class BehaviourEngine:
     """
-    Aggregates per-frame tracker outputs into smoothed behaviour labels
+    Aggregates clip-level outputs into smoothed behaviour labels
     and cumulative duration statistics.
 
     Args:
-        window_size:  Size of rolling history window for majority-vote smoothing.
-                      A value of 15 at 30 fps = 0.5-second smoothing window.
         fps:          Video framerate (used to convert frames → seconds).
     """
 
     ALL_BEHAVIOURS = ["Drinking", "Eating", "Sitting", "Standing"]
 
-    def __init__(self, window_size: int = 15, fps: float = 30.0):
-        self.window_size = window_size
+    def __init__(self, fps: float = 30.0):
         self.fps = fps
         self._cows: Dict[int, CowState] = {}
+        self.vit_model = None
+        self.classes = ["Drinking", "Eating", "Sitting", "Standing"]
+
+    def set_vit_classifier(self, model):
+        """Inject a trained Temporal ViT model for Phase 2 inference."""
+        self.vit_model = model
+        self.vit_model.eval()
 
     # -------------------------------------------------------------------
     # Public API
     # -------------------------------------------------------------------
 
-    def update(self, track_id: int, behaviour: str) -> str:
+    def update_from_clip(self, clip: Clip) -> str:
         """
-        Record a new raw behaviour observation for a cow.
+        Record a new clip observation for a cow.
+
+        Phase 1: Determine behaviour from the labels stored in the clip (majority vote).
+        Phase 2: Will be replaced by ViT inference on clip.frames if vit_model is set.
 
         Args:
-            track_id:  Stable tracker ID for this cow.
-            behaviour: Raw class label from YOLO (e.g. "Eating").
+            clip:  A populated Clip object with T frames and associated data.
 
         Returns:
-            The *smoothed* behaviour label for this frame (majority vote).
+            The *smoothed* behaviour label for this clip.
         """
-        state = self._get_or_create(track_id)
+        state = self._get_or_create(clip.track_id)
 
-        # Update rolling history
-        state.history.append(behaviour)
+        if self.vit_model is not None:
+            # Phase 2: ViT Inference
+            import torch
+            import numpy as np
+            
+            # frames: List of [H, W, C] (BGR)
+            # 1. Stack into [T, H, W, C]
+            frames_stacked = np.stack(clip.frames)
+            # 2. Convert BGR to RGB
+            frames_rgb = frames_stacked[..., ::-1].copy()
+            # 3. Convert to Tensor [1, T, C, H, W]
+            tensor = torch.from_numpy(frames_rgb).permute(0, 3, 1, 2).unsqueeze(0)
+            # 4. Normalize
+            tensor = tensor.float() / 255.0
+            
+            # Get device of model
+            device = next(self.vit_model.parameters()).device
+            tensor = tensor.to(device)
 
-        # Majority vote over the window
-        smoothed = self._majority_vote(state.history)
+            with torch.no_grad():
+                outputs = self.vit_model(tensor)
+                _, preds = torch.max(outputs, 1)
+                pred_idx = preds.item()
+                
+            smoothed = self.classes[pred_idx] if pred_idx < len(self.classes) else "Unknown"
+
+        else:
+            # Phase 1: Majority vote over the raw YOLO labels stored in the clip
+            counter = Counter(clip.labels)
+            smoothed = counter.most_common(1)[0][0]
+        
         state.last_smoothed = smoothed
 
         # Accumulate duration: 1 frame = 1/fps seconds
+        # Note: Since this is called for every frame a T-window exists (sliding),
+        # we still add 1 / fps seconds per call.
         if smoothed in state.durations:
             state.durations[smoothed] += 1.0 / self.fps
 
@@ -132,16 +164,9 @@ class BehaviourEngine:
         if track_id not in self._cows:
             self._cows[track_id] = CowState(
                 track_id=track_id,
-                history=deque(maxlen=self.window_size),
                 durations={b: 0.0 for b in self.ALL_BEHAVIOURS},
             )
         return self._cows[track_id]
-
-    @staticmethod
-    def _majority_vote(history: deque) -> str:
-        """Return the most common label in the history window."""
-        counter = Counter(history)
-        return counter.most_common(1)[0][0]
 
     # -------------------------------------------------------------------
     # Formatting helpers

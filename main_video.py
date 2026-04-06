@@ -4,8 +4,8 @@ main_video.py — Cow Behaviour Detection: Full Video Pipeline
 This is the main entry point for video-based cow behaviour detection.
 
 Pipeline:
-  Video → Frame extraction → YOLO + ByteTrack → BehaviourEngine
-       → Visualization → Annotated Video + behaviour_stats.csv
+  Video → Frame extraction → yolov12 + ByteTrack → BehaviourEngine
+       → Visualization → Annotated Video + behaviour_stats.csv (vision transformer)
 
 Usage:
   python main_video.py --source path/to/video.mp4

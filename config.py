@@ -55,7 +55,7 @@ class Config:
     device: str = "cuda"
 
     # YOLOv8 specific
-    model_variant: str = "rtdetr-l"  # Options: rtdetr-l, etc.
+    model_variant: str = "yolov12m"  # Options: yolov12m, etc.
     pretrained: bool = True  # Use pretrained weights
     patience: int = 50  # Early stopping patience
 

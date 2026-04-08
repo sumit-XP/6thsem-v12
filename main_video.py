@@ -48,9 +48,7 @@ import torch
 
 _DEFAULT_WEIGHTS_CANDIDATES = [
     "yolo-augmented/runs/train_yolov12/weights/best.pt",
-    "runs/train_rtdetr/weights/best.pt",
     "yolov12m.pt",
-    "rtdetr-l.pt",
 ]
 
 
@@ -135,11 +133,11 @@ def run_pipeline(
 
     Args:
         source:       Path to input video file (or '0' for webcam).
-        weights:      Path to RT-DETR .pt weights file.
+        weights:      Path to YOLOv12 .pt weights file.
         conf:         Detection confidence threshold.
         iou:          NMS IoU threshold.
         device:       Torch device string.
-        imgsz:        RT-DETR inference resolution.
+        imgsz:        YOLO inference resolution.
         output:       Output annotated video path. Auto-generated if empty.
         show_hud:     Whether to overlay behaviour stats HUD on output.
         window_size:  Smoothing window size (frames).
@@ -326,7 +324,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device",  type=str, default="cpu",
                         help="Device: cpu | cuda | 0")
     parser.add_argument("--imgsz",   type=int, default=640,
-                        help="RT-DETR inference image size")
+                        help="YOLO inference image size")
     parser.add_argument("--output",  type=str, default="",
                         help="Output annotated video path (auto-generated if empty)")
     parser.add_argument("--no-hud",  action="store_true",

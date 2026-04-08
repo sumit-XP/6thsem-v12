@@ -15,7 +15,7 @@ class Clip:
     """Represents a sequence of T consecutive frames for a single cow."""
     track_id: int
     frames: List[np.ndarray]
-    labels: List[str]  # Temporarily maintained for Phase 1 RT-DETR classification
+    labels: List[str]  # Temporarily maintained for Phase 1 YOLO classification
 
 
 class ClipBuffer:

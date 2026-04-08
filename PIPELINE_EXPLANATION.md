@@ -27,14 +27,14 @@ The system uses a hybrid approach combining a high-speed object detector with a 
 
 ### 1. Detection & Tracking (YOLOv12)
 *   **Role**: Identifies the location of cows in every frame.
-*   **Implementation**: Uses the `ultralytics` YOLO/RT-DETR framework.
+*   **Implementation**: Uses the `ultralytics` YOLO framework.
 *   **Tracking**: `ByteTrack` is used to assign stable, unique IDs to each cow. This ensures that "Cow ID 1" in frame 10 is recognized as the same cow in frame 500, allowing for duration analytics.
 
 ### 2. Behaviour Classification (Temporal Vision Transformer - ViT)
 *   **Role**: Specifically added to replace simple per-frame classification with **temporal awareness**.
 *   **Mechanism**: Instead of looking at a single image, the ViT looks at a "Clip" of **8 frames** (the T-window).
 *   **Advantage**: It sees *movement* (like a head moving towards a water trough) rather than just a static pose, leading to much higher accuracy for dynamic behaviours like drinking or eating.
-*   **Integration**: While the YOLO/RT-DETR performs the initial "rough" detection, the **Temporal ViT** performs the final, high-precision classification on the isolated cow crops.
+*   **Integration**: While the YOLO performs the initial "rough" detection, the **Temporal ViT** performs the final, high-precision classification on the isolated cow crops.
 
 ---
 
@@ -88,3 +88,11 @@ python main_video.py --vit-weights models/best_vit.pth --frame-skip 2
 ### Exported Results
 1.  **Annotated Video**: `runs/video_output/source_annotated.mp4` showing bounding boxes, IDs, and smoothed labels.
 2.  **Statistics CSV**: `runs/video_output/behavior_stats.csv` containing the exact duration (in seconds) that each cow spent on each activity.
+
+
+
+
+FeatureExtractionConnector: Added explanation of its role in refining raw patch embeddings and aligning features for the Transformer blocks.
+SelfAttentionBlock: Documented its responsibility for capturing spatio-temporal relationships between patches.
+BehaviourAwarenessModule: Detailed its mechanism for using learnable queries and a Sigmoid gate to focus on behavior-specific action signals.
+TemporalViT.forward: Added a numbered walkthrough of the entire processing pipeline from 5D video tensor to individual behavior logits.

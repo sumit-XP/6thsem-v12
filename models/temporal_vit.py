@@ -1,10 +1,110 @@
 import torch
 import torch.nn as nn
 
+
+
+# What: A projection layer that refines raw patch embeddings before the transformer blocks.
+# Why: Standard patch embeddings can be noisy. This connector aligns features into the expected embedding space
+#      and provides an initial non-linear transformation to help the model converge faster.
+# How: Uses a Bottleneck-style MLP (Linear 1x -> 4x -> 1x) with GELU activation, Dropout, and a Residual Connection.
+class FeatureExtractionConnector(nn.Module):
+    def __init__(self, embed_dim: int, dropout: float = 0.1):
+        super().__init__()
+        self.fc1 = nn.Linear(embed_dim, embed_dim * 4)
+        self.act = nn.GELU()
+        self.drop = nn.Dropout(dropout)
+        self.fc2 = nn.Linear(embed_dim * 4, embed_dim)
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.norm(x + residual)
+        return x
+
+
+
+# What: A core Transformer Encoder block consisting of Multi-Head Self-Attention and a Feed-Forward Network.
+# Why: This allows tokens (patches from different frames) to interact with each other, capturing
+#      both spatial (within a frame) and temporal (across frames) relationships.
+# How: Implements a "Pre-Norm" architecture where LayerNorm is applied before the Attention and MLP layers.
+#      It uses MultiheadAttention for context mapping followed by a two-layer Linear MLP.
+class SelfAttentionBlock(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        num_heads: int,
+        mlp_ratio: float = 4.0,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.attn_drop = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.ffn = nn.Sequential(
+            nn.Linear(embed_dim, int(embed_dim * mlp_ratio)),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(int(embed_dim * mlp_ratio), embed_dim),
+        )
+        self.ffn_drop = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_input = self.norm1(x)
+        attn_output, _ = self.attn(attn_input, attn_input, attn_input)
+        x = x + self.attn_drop(attn_output)
+
+        ffn_input = self.norm2(x)
+        ffn_output = self.ffn(ffn_input)
+        x = x + self.ffn_drop(ffn_output)
+        return x
+
+
+
+# What: A specialized attention gate that learns specific temporal behaviors like "drinking" or "eating".
+# Why: Simple transformers treat all tokens equally. This module uses learnable 'queries' to 
+#      actively search for behavior-specific signals in the token stream and highlight them.
+# How: Uses Cross-Attention between learnable 'behaviour_queries' and the input sequence. 
+#      The resulting context is turned into a Sigmoid gate that modulates (scales) the original features.
+class BehaviourAwarenessModule(nn.Module):
+    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
+        super().__init__()
+        self.behaviour_queries = nn.Parameter(torch.zeros(1, 4, embed_dim))
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.gate_proj = nn.Linear(embed_dim, embed_dim)
+        self.gate_act = nn.Sigmoid()
+        self.norm = nn.LayerNorm(embed_dim)
+        nn.init.trunc_normal_(self.behaviour_queries, std=0.02)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size = x.size(0)
+        queries = self.behaviour_queries.expand(batch_size, -1, -1)
+        behaviour_context, _ = self.cross_attn(queries, x, x)
+        pooled_context = behaviour_context.mean(dim=1, keepdim=True)
+        gate = self.gate_act(self.gate_proj(pooled_context))
+        x = x + (x * gate)
+        x = self.norm(x)
+        return x
+
+
 class TemporalViT(nn.Module):
     """
     Lightweight Video Vision Transformer (ViViT-lite).
-    Expects input shape: [B, T, C, H, W]
+    Expects input shape: [B, T, C, H, W] / B=batch, T=8 frames, C=3 channels, 224×224
     """
     def __init__(
         self,
@@ -36,19 +136,24 @@ class TemporalViT(nn.Module):
         
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_drop = nn.Dropout(p=dropout)
-        
-        # Transformer Blocks
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim,
-            nhead=num_heads,
-            dim_feedforward=int(embed_dim * mlp_ratio),
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-            norm_first=True
+
+        self.connector = FeatureExtractionConnector(embed_dim=embed_dim, dropout=dropout)
+        self.transformer = nn.ModuleList(
+            [
+                SelfAttentionBlock(
+                    embed_dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    dropout=dropout,
+                )
+                for _ in range(depth)
+            ]
         )
-        # Sequence goes through `depth` layers
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=depth)
+        self.behaviour_awareness = BehaviourAwarenessModule(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+        )
         
         # Classification head
         self.norm = nn.LayerNorm(embed_dim)
@@ -69,6 +174,14 @@ class TemporalViT(nn.Module):
             nn.init.zeros_(m.bias)
             nn.init.ones_(m.weight)
 
+    # What: The main processing logic that converts a video clip into a behavior classification.
+    # Why: It handles the transformation from 5D (Batch, Time, Channel, H, W) to a 1D vector of logits.
+    # How: 
+    # 1. Patchify: Each frame is split into 16x16 pixels flattened into embeddings.
+    # 2. Positional Encoding: Adds spatial (where in frame) and temporal (when in clip) information.
+    # 3. Transformers: Runs multiple self-attention blocks to model motion.
+    # 4. Gating: Uses BehaviourAwareness to focus on relevant action cues.
+    # 5. Pooling: Averages the frame-wise 'Class Tokens' to get a single summary vector for classification.
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass for a batch of temporal clips.
@@ -106,13 +219,18 @@ class TemporalViT(nn.Module):
         
         # Flatten time and space back to a single sequence per batch item
         x = x.view(B, T * N, D)
-        
+
+        x = self.connector(x)
+
         # Apply dropout
         x = self.pos_drop(x)
-        
+
         # Run through transformer
-        x = self.transformer(x)
-        
+        for block in self.transformer:
+            x = block(x)
+
+        x = self.behaviour_awareness(x)
+
         # Extract the CLS token from each frame (located at indices 0, N, 2N...)
         x = x.view(B, T, N, D)
         cls_tokens_out = x[:, :, 0, :]          # [B, T, D]
